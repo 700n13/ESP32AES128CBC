@@ -2,20 +2,14 @@
 #include <WebServer.h>
 #include <CryptoAES_CBC.h>
 #include <AES.h>
-#include <string.h>
 #include <BigNumber.h>
 
 // Wi-Fi credentials - Access Point mode
 const char* ssid = "ultra_wifi";
 const char* password = "12345678";
 
-// Diffie-Hellman parameters (use large prime numbers in production)
-const char* prime = "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
-                   "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
-                   "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
-                   "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
-                   "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381"
-                   "FFFFFFFFFFFFFFFF";
+// Diffie-Hellman parameters (smaller numbers for testing - use larger ones in production)
+const char* prime = "FFFF"; // Smaller prime for testing
 const char* generator = "2";
 
 // Encryption variables
@@ -69,24 +63,28 @@ void generateIV() {
 void initDH() {
     BigNumber::begin();
     
-    // Convert parameters to BigNumber
-    BigNumber p(prime, 16);
+    // Create prime number from string
+    BigNumber p(prime);
     BigNumber g(generator);
     
-    // Generate random private key (should be truly random in production)
-    privateKey = BigNumber(random(1000000));
+    // Generate random private key (between 2 and 100 for testing)
+    privateKey = BigNumber(random(2, 100));
     
     // Calculate public key: g^private mod p
-    publicKey = g.powMod(privateKey, p);
+    publicKey = g.pow(privateKey);
+    publicKey = publicKey % p;
 }
 
 // Calculate shared secret from peer's public key
 void calculateSharedSecret(String peerPublicKeyStr) {
-    BigNumber p(prime, 16);
-    BigNumber peerPublicKey(peerPublicKeyStr);
+    BigNumber p(prime);
+    
+    // Convert peer's public key string to BigNumber
+    BigNumber peerPublicKey(peerPublicKeyStr.c_str());
     
     // Calculate shared secret: peer_public^private mod p
-    sharedSecret = peerPublicKey.powMod(privateKey, p);
+    sharedSecret = peerPublicKey.pow(privateKey);
+    sharedSecret = sharedSecret % p;
     
     // Derive AES key from shared secret
     String secretStr = sharedSecret.toString();
@@ -96,6 +94,10 @@ void calculateSharedSecret(String peerPublicKeyStr) {
     
     // Initialize AES with derived key
     aes128.setKey(derivedKey, 16);
+    
+    // Debug print
+    Serial.println("Derived Key: ");
+    printBytes("Key", derivedKey, 16);
 }
 
 void encryptMessage(const char* message) {
@@ -169,6 +171,9 @@ void setup() {
     
     // Generate initial IV
     generateIV();
+    
+    // Initial message encryption
+    encryptMessage("Hello from ESP32!");
 }
 
 void loop() {
